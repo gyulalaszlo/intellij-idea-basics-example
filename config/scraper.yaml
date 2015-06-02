@@ -9,5 +9,5 @@ columns:
 
  - name: Picture
    selector: .team_profile_pic
-   extract: "@style"
+   extract: "style"
    regexp: "url\\((.*?)\\)"

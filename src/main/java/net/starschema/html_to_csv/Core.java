@@ -8,7 +8,6 @@ import org.yaml.snakeyaml.Yaml;
 import java.io.*;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -30,9 +29,30 @@ public class Core {
 
     }
 
+    private static final class Param {
+        private final Map data;
+
+        public Param(Map data) { this.data = data; }
+
+        public <T> T get(final String key) { return (T) data.get(key);}
+
+        public <T> T get(final String key, T defaultValue) {
+            Object o = data.get(key);
+            return o == null ? defaultValue : (T)o;
+        }
+    }
+
     public static void main(String[] args) throws IOException {
 
-        final Param config = new Param(loadYamlFile(loadCLIArgs(args)));
+        String result;
+        if (args.length != 1) {
+            throw new IllegalArgumentException("Usage: <java-cmd-line> <YAML config>");
+        } else {
+            result = args[0];
+        }
+        InputStream input =  new FileInputStream(new File(result));
+        Yaml yaml = new Yaml();
+        final Param config = new Param((Map) yaml.load(input));
 
 
         final List<Column> columnData = config
@@ -55,8 +75,7 @@ public class Core {
                                 .map(col -> col.name)
                                 .collect(Collectors.toList())
                                 .toArray(new String[0]))
-                .print(System.out)
-                ;
+                .print(System.out);
 
         Jsoup.connect(config.get("url", "http://127.0.0.1/"))
                 .get()
@@ -70,59 +89,21 @@ public class Core {
                                         (col.extract.charAt(0) == '@')
                                         ? el.attr(col.extract.substring(1))
                                         : (el.text()))
-                                .map(res ->
-                                        matchGroup(res, col.regexp, 1))
+                                .map(res -> {
+                                    Matcher m = col.regexp.matcher(res);
+                                    return m.find() ? m.group(1) : null;
+                                })
                                 .reduce("", (memo, e) -> memo + e))
                         .collect(Collectors.toList()))
 
-                .forEach(row -> safeCSVPrint(printer, row));
+                .forEach(row -> {
+                    try {
+                        printer.printRecord(row);
+                    } catch (IOException e) {
+                        e.printStackTrace(System.err);
+                    }
+                });
 
     }
 
-    private static final class Param {
-        private final Map data;
-
-        public Param(Map data) { this.data = data; }
-
-        public <T> T get(final String key) { return (T) data.get(key);}
-
-        public <T> T get(final String key, T defaultValue) {
-            Object o = data.get(key);
-            return o == null ? defaultValue : (T)o;
-        }
-    }
-
-    private static void safeCSVPrint(CSVPrinter printer, List<String> row) {
-        try {
-            printer.printRecord(row);
-        } catch (IOException e) {
-            e.printStackTrace(System.err);
-        }
-    }
-
-    private static String matchGroup(String str, Pattern p, int groupIdx) {
-        Matcher m = p.matcher(str);
-        return m.find() ? m.group(groupIdx) : null;
-    }
-
-    /** Validate the presence of the CLI args */
-    private static String loadCLIArgs(String[] args) {
-        if (args.length != 1) {
-            throw new IllegalArgumentException("Usage: <java-cmd-line> <YAML config>");
-        } else {
-            return args[0];
-        }
-    }
-
-    /**
-     * Loads a yaml file by file name.
-     * @param configFileName
-     * @return
-     * @throws FileNotFoundException
-     */
-    private static Map loadYamlFile(String configFileName) throws FileNotFoundException {
-        InputStream input =  new FileInputStream(new File(configFileName));
-        Yaml yaml = new Yaml();
-        return (Map)yaml.load(input);
-    }
 }
