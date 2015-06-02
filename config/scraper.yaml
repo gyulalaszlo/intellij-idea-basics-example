@@ -1,0 +1,13 @@
+url: "http://localhost:8080/about-team.html"
+root: .team_profile_wrap
+columns:
+ - name: Name
+   selector: h3
+
+ - name: Title
+   selector: h4
+
+ - name: Picture
+   selector: .team_profile_pic
+   extract: "@style"
+   regexp: "url\\((.*?)\\)"
